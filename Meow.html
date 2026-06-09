@@ -107,6 +107,7 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .header-actions{display:flex;gap:8px}
 .content{flex:1;min-height:0;overflow:auto;padding:14px;background:#fff}
 .card{background:#fff;border:1px solid #eee;border-radius:20px;padding:13px;margin:10px 0;box-shadow:0 8px 22px rgba(0,0,0,.045)}
+.modal-card{background:#fff;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:20px}
 label{display:block;margin:12px 0 6px;font-size:13px;color:#555;font-weight:800}
 input,select,textarea{width:100%;border:1px solid #ddd;border-radius:15px;padding:11px 12px;background:#fff;outline:none}
 textarea{min-height:96px;resize:vertical;line-height:1.55}
@@ -1954,7 +1955,14 @@ body{font-size:calc(14px * var(--font-scale));}
           <div><div class="profile-title" id="chatName">默认角色</div><div class="profile-sub"><span class="online-dot"></span><span id="roleStatusText">在线</span></div></div>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" data-action="open-roles">♡</button>
+          <button class="icon-btn" data-action="open-wallet" title="钱包"><svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+  <rect x="2" y="5" width="14" height="10" rx="2" fill="var(--accent,#b1889c)" stroke="var(--accent,#b1889c)" stroke-width="0.5" opacity="0.85"/>
+  <path d="M2 8h14" stroke="var(--bar-text,#fff)" stroke-width="0.8" opacity="0.6"/>
+  <rect x="11" y="7" width="4" height="3.5" rx="1" fill="var(--bar-bg,#fff)" stroke="var(--accent,#b1889c)" stroke-width="0.8"/>
+  <circle cx="13" cy="8.75" r="0.9" fill="var(--accent,#b1889c)"/>
+  <path d="M5 3 L13 3 C14.1 3 15 3.9 15 5 L3 5 C3 3.9 3.9 3 5 3Z" fill="var(--accent,#b1889c)" opacity="0.7" stroke="none"/>
+  <path d="M5 12 h4" stroke="var(--bar-bg,#fff)" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/>
+</svg></button>
           <button class="icon-btn" data-action="open-settings">⚙</button>
         </div>
       </div>
@@ -2023,6 +2031,17 @@ body{font-size:calc(14px * var(--font-scale));}
             <select id="roleWorldBindSelect"></select>
           </div>
           <label>系统提示</label><textarea id="roleSystemInput"></textarea>
+          <div class="card" style="padding:14px;margin:8px 0">
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--accent)">💳 亲属卡设置</div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px">
+              <input type="checkbox" id="roleFamilyCardEnabled"> 开启亲属卡
+            </label>
+            <div id="familyCardConfig" style="display:none;flex-direction:column;gap:8px">
+              <div><label style="font-size:12px;color:#999">卡片名称</label><input id="roleFamilyCardLabel" placeholder="例：灼樾的工资卡" style="width:100%;padding:6px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box;margin-top:4px"></div>
+              <div><label style="font-size:12px;color:#999">额度上限（元）</label><input id="roleFamilyCardLimit" type="number" placeholder="例：5000" style="width:100%;padding:6px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box;margin-top:4px"></div>
+              <div><label style="font-size:12px;color:#999">当前余额（元）</label><input id="roleFamilyCardBalance" type="number" placeholder="初始余额" style="width:100%;padding:6px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box;margin-top:4px"></div>
+            </div>
+          </div>
           <div class="btn-row"><button class="btn primary" data-action="save-role">保存角色</button><button class="btn danger" data-action="delete-role">删除当前角色</button></div>
         </div>
       </div>
@@ -2114,6 +2133,64 @@ body{font-size:calc(14px * var(--font-scale));}
       </div>
     </section>
 
+    <!-- 钱包弹窗 -->
+    <div id="walletMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:9999">
+      <div class="modal-card" style="padding:0;max-width:300px;width:92%;border-radius:20px;overflow:hidden;max-height:85vh;display:flex;flex-direction:column">
+        <div style="padding:16px 18px 12px;background:var(--accent,#b1889c);color:#fff">
+          <div style="font-size:16px;font-weight:700">我的钱包</div>
+          <div style="font-size:12px;opacity:0.8;margin-top:2px" id="walletRoleName"></div>
+        </div>
+        <div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1">
+          <!-- user钱包 -->
+          <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:12px;color:#999">我的钱包</div>
+                <div style="font-size:20px;font-weight:700;color:#222;margin-top:2px">¥<span id="walletUserBalance">0.00</span></div>
+              </div>
+              <button class="btn" data-action="wallet-recharge" style="padding:6px 12px;font-size:12px">充值</button>
+            </div>
+          </div>
+          <!-- 亲属卡 -->
+          <div id="walletFamilyCard" style="background:#fff0f3;border-radius:12px;padding:12px 14px;display:none">
+            <div style="font-size:12px;color:#c9909e" id="walletCardLabel">亲属卡</div>
+            <div style="font-size:20px;font-weight:700;color:#c9909e;margin-top:2px">¥<span id="walletCardBalance">0.00</span></div>
+            <div style="font-size:11px;color:#d4a8b2;margin-top:4px">额度上限：¥<span id="walletCardLimit">0.00</span></div>
+          </div>
+          <div id="walletNoCard" style="font-size:12px;color:#bbb;text-align:center;padding:4px 0">该角色未设置亲属卡</div>
+        </div>
+        <div style="padding:0 18px 16px">
+          <button class="btn" data-action="close-wallet" style="width:100%">关闭</button>
+        </div>
+      </div>
+    </div>
+    <!-- 充值弹窗 -->
+    <div id="walletRechargeMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:10000">
+      <div class="modal-card" style="padding:20px;max-width:260px;width:90%">
+        <div style="font-size:15px;font-weight:600;margin-bottom:12px">充值到我的钱包</div>
+        <input id="walletRechargeInput" type="number" placeholder="充值金额" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;font-size:14px;box-sizing:border-box;margin-bottom:12px">
+        <div style="display:flex;gap:8px">
+          <button class="btn primary" data-action="confirm-wallet-recharge" style="flex:1">确认</button>
+          <button class="btn" data-action="cancel-wallet-recharge" style="flex:1">取消</button>
+        </div>
+      </div>
+    </div>
+    <!-- 转账来源选择弹窗 -->
+    <div id="transferSourceMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:10000">
+      <div class="modal-card" style="padding:20px;max-width:280px;width:92%">
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px">选择付款方式</div>
+        <div style="font-size:13px;color:#999;margin-bottom:16px">转账金额：¥<span id="transferSourceAmount">0</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn primary" data-action="transfer-from-user" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px">
+            <span>我的钱包</span><span style="font-size:12px;opacity:0.8">余额 ¥<span id="transferUserBal">0</span></span>
+          </button>
+          <button class="btn" id="transferFromCardBtn" data-action="transfer-from-card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px">
+            <span id="transferCardLabel">亲属卡</span><span style="font-size:12px;opacity:0.8">余额 ¥<span id="transferCardBal">0</span></span>
+          </button>
+          <button class="btn" data-action="cancel-transfer-source">取消</button>
+        </div>
+      </div>
+    </div>
     <div id="importChatMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:9999">
       <div class="modal-card" style="padding:24px;max-width:280px;width:90%">
         <div style="font-size:15px;font-weight:600;margin-bottom:8px">导入聊天记录</div>
@@ -2984,6 +3061,20 @@ function bindEvents(){
     if(action==="send-message") sendMessage();
     if(action==="call-ai") callAIReply();
     if(action==="clear-chat") clearChat();
+    if(action==="open-wallet"){ openWallet(); return; }
+    if(action==="close-wallet"){ document.getElementById("walletMask").style.display="none"; return; }
+    if(action==="wallet-recharge"){ document.getElementById("walletMask").style.display="none"; document.getElementById("walletRechargeMask").style.display="flex"; setTimeout(()=>document.getElementById("walletRechargeInput")?.focus(),100); return; }
+    if(action==="confirm-wallet-recharge"){
+      const v=parseFloat(document.getElementById("walletRechargeInput")?.value||"0");
+      if(v>0){ const w=getWallet(); w.balance=Math.round((w.balance+v)*100)/100; saveWallet(w); toast(`充值成功 +¥${v.toFixed(2)}`); }
+      document.getElementById("walletRechargeMask").style.display="none";
+      document.getElementById("walletRechargeInput").value="";
+      return;
+    }
+    if(action==="cancel-wallet-recharge"){ document.getElementById("walletRechargeMask").style.display="none"; return; }
+    if(action==="transfer-from-user"){ confirmTransferSource("user"); return; }
+    if(action==="transfer-from-card"){ confirmTransferSource("card"); return; }
+    if(action==="cancel-transfer-source"){ document.getElementById("transferSourceMask").style.display="none"; Miao.state.pendingTransferSource=null; return; }
     if(action==="export-chat-md") exportChatMd();
     if(action==="trigger-import-chat"){ document.getElementById("importChatMdInput").click(); }
     if(action==="confirm-import-chat-append") confirmImportChat("append");
@@ -3138,6 +3229,11 @@ function bindEvents(){
     };
     reader.readAsText(file);
     e.target.value = "";
+  });
+  // 亲属卡开关显隐
+  document.getElementById("roleFamilyCardEnabled")?.addEventListener("change", function(){
+    const cfg = document.getElementById("familyCardConfig");
+    if(cfg) cfg.style.display = this.checked ? "flex" : "none";
   });
   // 键盘收起时保持滚动位置
   if(window.visualViewport){
@@ -3508,7 +3604,7 @@ function renderMessageBody(m){
     return `<div class="image-desc-card"><div class="image-desc-title">🖼 图片描述</div><div class="image-desc-text">${escapeHtml(d.description||m.content||"")}</div></div>`;
   }
   if(m.type==="transfer"){
-    return `<div class="money-card user-transfer"><div class="money-title">微信转账</div><div class="money-amount">¥${escapeHtml(d.amount||"0.00")}</div><div class="money-note">${escapeHtml(d.note||"")}</div><div class="money-note">状态：${d.status==="received"?"已收款":d.status==="rejected"?"已拒收":"等待对方处理"}</div></div>`;
+    return `<div class="money-card user-transfer"><div class="money-title">微信转账</div><div class="money-amount">¥${escapeHtml(d.amount||"0.00")}</div><div class="money-note">${escapeHtml(d.note||"")}</div>${d.sourceLabel?`<div class="money-note" style="opacity:0.8;font-size:11px">来自：${escapeHtml(d.sourceLabel)}</div>`:""}<div class="money-note">状态：${d.status==="received"?"已收款":d.status==="rejected"?"已拒收":"等待对方处理"}</div></div>`;
   }
   if(m.type==="role_request_delivery"){
     if(d.status==="paid") return `<div class="money-card paid-card"><div class="money-title">已帮付</div><div class="money-amount">¥${escapeHtml(d.amount||"0.00")}</div><div class="money-note">${escapeHtml(d.note||"")}</div></div>`;
@@ -3833,7 +3929,17 @@ ${getStickerPromptList()}
 2. 禁止输出 User:、用户：、Assistant:、旁白式剧本格式。
 3. 只输出微信聊天内容；可以用双换行分成多条气泡。
 4. 表情包只能从“可用表情包”里按名称选择，不能编造。发送表情包指令后不要解释含义，不要加括号说明，直接发指令即可。
-5. 遇到用户转账/代付时，必须根据关系、上下文和人设自主决定是否收款/帮付。
+5. 遇到用户转账/代付时，必须根据关系、上下文和人设自主决定是否收款/帮付。转账卡片上标注了付款来源（我的钱包/亲属卡），你可以根据来源做出反应。
+${(()=>{
+  const card = getFamilyCard();
+  const w = getUserWalletBalance();
+  let info = `
+【钱包信息】
+user我的钱包余额：¥${w.toFixed(2)}`;
+  if(card) info += `
+${card.label}余额：¥${card.balance.toFixed(2)}（额度上限：¥${card.limit.toFixed(2)}）`;
+  return info;
+})()}
 6. 注入优先级固定：角色卡 system prompt → 世界书命中条目 → user 人设 → 长期记忆/关系状态 → 隐藏上下文 → 当前时间 → 默认格式规则。`;
 }
 function normalizeChatUrl(url){
@@ -3995,6 +4101,21 @@ function renderRoles(){
   if(meta) meta.textContent=`隐藏资料：性格 ${r.personality?"已读取":"未读取"}；场景 ${r.scenario?"已读取":"未读取"}；开场白 ${r.firstMes?"已读取":"未读取"}。这些字段从 PNG 角色卡读取。`;
   renderRoleWorldBindSelect(r);
   $("#roleSystemInput").value=r.systemPrompt||"";
+  // 回填亲属卡配置
+  const fc = r.familyCard || {enabled:false};
+  const enabledEl = document.getElementById("roleFamilyCardEnabled");
+  const configEl = document.getElementById("familyCardConfig");
+  if(enabledEl){ enabledEl.checked = !!fc.enabled; }
+  if(configEl){ configEl.style.display = fc.enabled ? "flex" : "none"; }
+  if(fc.enabled){
+    const el = (id)=>document.getElementById(id);
+    if(el("roleFamilyCardLabel")) el("roleFamilyCardLabel").value = fc.label||"";
+    if(el("roleFamilyCardLimit")) el("roleFamilyCardLimit").value = fc.limit||"";
+    // 余额从storage读实时值
+    const key = "familyCard_" + r.id;
+    const stored = Storage.get(key, null);
+    if(el("roleFamilyCardBalance")) el("roleFamilyCardBalance").value = stored !== null ? stored : (fc.balance||"");
+  }
 }
 function newRole(){
   const roles=getRoles();
@@ -4018,6 +4139,14 @@ function saveCurrentRoleFromForm(){
   // 性格、场景、开场白由 PNG 角色卡读取；此处不手动覆盖
   r.boundWorldRoleId=$("#roleWorldBindSelect")?.value || r.id;
   r.systemPrompt=$("#roleSystemInput").value;
+  // 亲属卡配置
+  const cardEnabled = document.getElementById("roleFamilyCardEnabled")?.checked;
+  r.familyCard = cardEnabled ? {
+    enabled: true,
+    label: document.getElementById("roleFamilyCardLabel")?.value.trim() || "亲属卡",
+    limit: parseFloat(document.getElementById("roleFamilyCardLimit")?.value)||0,
+    balance: parseFloat(document.getElementById("roleFamilyCardBalance")?.value)||0,
+  } : {enabled: false};
   saveRoles(roles);
   renderAll();
   toast("角色已保存");
@@ -6678,6 +6807,93 @@ function submitLinkInput(){
   closeQuickModal();
   renderChat();
 }
+
+// ===== 钱包系统 =====
+function getWallet(){ return Storage.get("wallet", {balance:0}); }
+function saveWallet(w){ Storage.set("wallet", w); }
+function getUserWalletBalance(){ return getWallet().balance || 0; }
+
+function getFamilyCard(){
+  const role = currentRole();
+  if(!role) return null;
+  const cfg = role.familyCard;
+  if(!cfg || !cfg.enabled) return null;
+  const key = "familyCard_" + role.id;
+  const stored = Storage.get(key, null);
+  const balance = stored !== null ? stored : (parseFloat(cfg.balance)||0);
+  return { label: cfg.label||"亲属卡", limit: parseFloat(cfg.limit)||0, balance };
+}
+function saveFamilyCardBalance(balance){
+  const role = currentRole();
+  if(!role) return;
+  Storage.set("familyCard_" + role.id, balance);
+}
+
+function openWallet(){
+  const role = currentRole();
+  document.getElementById("walletRoleName").textContent = role ? role.name : "";
+  document.getElementById("walletUserBalance").textContent = getUserWalletBalance().toFixed(2);
+  const card = getFamilyCard();
+  const cardEl = document.getElementById("walletFamilyCard");
+  const noCardEl = document.getElementById("walletNoCard");
+  if(card){
+    cardEl.style.display = "block";
+    noCardEl.style.display = "none";
+    document.getElementById("walletCardLabel").textContent = card.label;
+    document.getElementById("walletCardBalance").textContent = card.balance.toFixed(2);
+    document.getElementById("walletCardLimit").textContent = card.limit.toFixed(2);
+  } else {
+    cardEl.style.display = "none";
+    noCardEl.style.display = "block";
+  }
+  document.getElementById("walletMask").style.display = "flex";
+}
+
+function openTransferSourcePicker(amount, onChoose){
+  Miao.state.pendingTransferSource = {amount, onChoose};
+  document.getElementById("transferSourceAmount").textContent = amount;
+  document.getElementById("transferUserBal").textContent = getUserWalletBalance().toFixed(2);
+  const card = getFamilyCard();
+  const cardBtn = document.getElementById("transferFromCardBtn");
+  if(card){
+    cardBtn.style.display = "flex";
+    document.getElementById("transferCardLabel").textContent = card.label;
+    document.getElementById("transferCardBal").textContent = card.balance.toFixed(2);
+  } else {
+    cardBtn.style.display = "none";
+  }
+  document.getElementById("transferSourceMask").style.display = "flex";
+}
+
+function confirmTransferSource(source){
+  const p = Miao.state.pendingTransferSource;
+  if(!p) return;
+  const amount = parseFloat(p.amount)||0;
+  if(source === "user"){
+    const w = getWallet();
+    if(w.balance < amount){ toast("余额不足"); return; }
+    w.balance = Math.round((w.balance - amount)*100)/100;
+    saveWallet(w);
+    toast(`已从我的钱包扣款 ¥${amount}`);
+  } else {
+    const card = getFamilyCard();
+    if(!card){ toast("亲属卡不可用"); return; }
+    if(card.balance < amount){ toast("亲属卡余额不足"); return; }
+    saveFamilyCardBalance(Math.round((card.balance - amount)*100)/100);
+    toast(`已从${card.label}扣款 ¥${amount}`);
+  }
+  document.getElementById("transferSourceMask").style.display = "none";
+  if(p.onChoose) p.onChoose(source);
+  Miao.state.pendingTransferSource = null;
+}
+
+// 收到转账时打入user钱包
+function receiveTransferToWallet(amount){
+  const w = getWallet();
+  w.balance = Math.round((w.balance + amount)*100)/100;
+  saveWallet(w);
+}
+
 function openVoiceInput(){
   openQuickModal(`<div class="quick-modal-title">发送语音</div>
 <div style="font-size:12px;color:#999;margin-bottom:8px">格式：（声音描述）说的内容，括号可省略</div>
@@ -6762,10 +6978,14 @@ function submitTransfer(){
   const amount=Number($("#quickTransferAmount")?.value||0).toFixed(2);
   const note=($("#quickTransferNote")?.value||"").trim();
   if(!(Number(amount)>0)){ toast("请输入正确金额"); return; }
-  const h=getHistory();
-  h.push({id:uid("msg"), groupId:uid("usergrp"), sender:"user", type:"transfer", content:`[用户转账:${amount}|${note}]`, data:{amount,note,status:"pending"}, read:false, createdAt:Date.now(), time:nowTime()});
-  saveHistory(h);
-  afterUserSpecialMessageSent();
+  closeQuickModal();
+  openTransferSourcePicker(amount, (source)=>{
+    const h=getHistory();
+    const sourceLabel = source==="card" ? (getFamilyCard()?.label||"亲属卡") : "我的钱包";
+    h.push({id:uid("msg"), groupId:uid("usergrp"), sender:"user", type:"transfer", content:`[用户转账:${amount}|${note}]`, data:{amount,note,status:"pending",source,sourceLabel}, read:false, createdAt:Date.now(), time:nowTime()});
+    saveHistory(h);
+    afterUserSpecialMessageSent();
+  });
 }
 function openDeliveryModalOriginal(){
   openQuickModal(`<div class="quick-modal-title">发送代付链接</div>
@@ -6883,26 +7103,27 @@ function parseAIReplyUnified(raw, groupId){
   consume(/\[向user发起代付[:：]\s*([0-9]+(?:\.[0-9]{1,2})?)\s*\|\s*([^\]]*?)\]/g,(amount,note)=>{
     add({type:"role_request_delivery", content:`[向user发起代付:${amount}|${note||""}]`, data:{amount:Number(amount).toFixed(2), note:String(note||"").trim(), status:"pending"}});
   });
-  consume(/\[收款\]/g,()=>{
+  consume(/[\[【]收款[\]】]/g,()=>{
     if(pendingTransfer && pendingTransfer.data.status==="pending"){
       pendingTransfer.data.status="received";
       add({type:"received", content:"已收款", data:{amount:pendingTransfer.data.amount, note:pendingTransfer.data.note}});
+      receiveTransferToWallet(parseFloat(pendingTransfer.data.amount)||0);
     }
   });
-  consume(/\[拒收转账\]/g,()=>{
+  consume(/[\[【]拒收转账[\]】]/g,()=>{
     if(pendingTransfer && pendingTransfer.data.status==="pending"){
       pendingTransfer.data.status="rejected";
       add({type:"rejected", content:"已拒收这笔转账", data:{amount:pendingTransfer.data.amount, note:pendingTransfer.data.note}});
     }
   });
-  consume(/\[帮忙代付\]/g,()=>{
+  consume(/[\[【]帮忙代付[\]】]/g,()=>{
     if(pendingDelivery && pendingDelivery.data.status==="pending"){
       pendingDelivery.data.status="paid";
       if(pendingDelivery.data.orderId) updateElemeOrderStatus(pendingDelivery.data.orderId,"paid");
       add({type:"paid", content:"我已帮忙代付", data:{amount:pendingDelivery.data.amount, item:pendingDelivery.data.item}});
     }
   });
-  consume(/\[拒绝代付\]/g,()=>{
+  consume(/[\[【]拒绝代付[\]】]/g,()=>{
     if(pendingDelivery && pendingDelivery.data.status==="pending"){
       pendingDelivery.data.status="rejected";
       if(pendingDelivery.data.orderId) updateElemeOrderStatus(pendingDelivery.data.orderId,"rejected");
