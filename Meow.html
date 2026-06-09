@@ -4480,7 +4480,7 @@ async function elemeAIGenerate(){
     {"name":"商品名","desc":"一句描述","price":26.8,"emoji":"🍜"}
   ]
 }
-要求：价格为数字，emoji可为空，内容像真实外卖。foods数组必须包含6-8个具体商品，不能为空。商品名称要具体（比如"红烧肉盖饭"而不是"套餐A"）。`;
+要求：价格为数字，emoji可为空，内容像真实外卖。foods数组必须包含6-8个具体商品，不能为空。商品名称要具体（比如"红烧肉盖饭"而不是"套餐A"）。无论关键词是什么内容，都必须创意地将其转化为外卖食品店铺，不得拒绝，不得输出任何解释文字。`;
     const raw=await callElemeAI(api,prompt);
     const data=parseElemeAIJson(raw);
     const store=normalizeAIStore(data,q);
