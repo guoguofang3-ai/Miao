@@ -7086,7 +7086,15 @@ function parseAIReplyUnified(raw, groupId){
     const comments=commentRaw?commentRaw.split("//").map(s=>s.trim()).filter(Boolean):[];
     if(title) add({type:"link", content:`[链接:${title}]`, data:{platform,title,body,comments}});
   });
-  consume(/\[(?:发送语音|语音)[:：]\s*([^\]]+?)\]/g,(text)=>{
+  consume(/[\[【]状态更新[:：]\s*([^\]】]+?)[\]】]/g,(status)=>{
+    status=String(status||"").trim();
+    if(status){
+      Storage.set(Storage.roleKey("roleStatus"), status);
+      const el=document.getElementById("roleStatusText");
+      if(el) el.textContent=status;
+    }
+  });
+  consume(/[\[【](?:发送语音|语音)[:：]\s*([^\]】]+?)[\]】]/g,(text)=>{
     text=String(text||"").trim();
     if(text){
       const dur=Math.max(1,Math.min(60,Math.ceil(text.length/5)));
