@@ -3867,21 +3867,42 @@ async function callAI(api, history, onChunk){
     return full;
   }
 
-  // 非流式
-  let res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body)});
-  let text=await res.text();
-  if(!res.ok && text.includes("top-level 'system'")){
-    const sys=messages.find(m=>m.role==="system")?.content || system;
-    body={...body,system:sys,messages:messages.filter(m=>m.role!=="system")};
-    res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body)});
-    text=await res.text();
+  // 非流式 + tool calling 循环
+  const wechatTools=getWechatTools();
+  body={...body, tools:wechatTools, tool_choice:"auto"};
+  let loopMessages=[...messages];
+  for(let i=0;i<5;i++){
+    let res=await fetch(url,{method:"POST",headers,body:JSON.stringify({...body,messages:loopMessages})});
+    let text=await res.text();
+    if(!res.ok && text.includes("top-level 'system'")){
+      const sys=loopMessages.find(m=>m.role==="system")?.content || system;
+      const noSys=loopMessages.filter(m=>m.role!=="system");
+      res=await fetch(url,{method:"POST",headers,body:JSON.stringify({...body,system:sys,messages:noSys})});
+      text=await res.text();
+    }
+    if(!res.ok) throw new Error(text.slice(0,180)||res.statusText);
+    const data=JSON.parse(text);
+    const choice=data.choices?.[0];
+    if(!choice) break;
+    const msg=choice.message;
+    Miao.state.lastAIRaw=text.slice(0,600);
+    // 没有tool_calls，返回普通文字
+    if(!msg.tool_calls || msg.tool_calls.length===0){
+      const content=msg.content || data.content?.[0]?.text || data.output_text || "";
+      Miao.state.lastAIContent=content;
+      return content;
+    }
+    // 有tool_calls，执行工具
+    if(msg.content===undefined) msg.content=null;
+    loopMessages.push(msg);
+    for(const tc of msg.tool_calls){
+      const args=JSON.parse(tc.function.arguments||"{}");
+      const result=await executeWechatTool(tc.function.name, args);
+      loopMessages.push({role:"tool", tool_call_id:tc.id, content:JSON.stringify(result)});
+    }
   }
-  if(!res.ok) throw new Error(text.slice(0,180)||res.statusText);
-  const data=JSON.parse(text);
-  const content=data.choices?.[0]?.message?.content || data.content?.[0]?.text || data.output_text || "";
-  Miao.state.lastAIRaw=text.slice(0,600);
-  Miao.state.lastAIContent=content;
-  return content;
+  Miao.state.lastAIContent="";
+  return "[工具调用超过上限，未获得最终回复]";
 }
 function buildSystemPrompt(role){
   const world = getMatchedWorldEntries().map((e,i)=>`【世界书${i+1}：${e.title}】\n关键词：${e.keys}\n内容：${e.content}`).join("\n\n") || "无命中条目";
@@ -3958,7 +3979,14 @@ user我的钱包余额：¥${w.toFixed(2)}`;
 ${card.label}余额：¥${card.balance.toFixed(2)}（额度上限：¥${card.limit.toFixed(2)}）`;
   return info;
 })()}
-6. 注入优先级固定：角色卡 system prompt → 世界书命中条目 → user 人设 → 长期记忆/关系状态 → 隐藏上下文 → 当前时间 → 默认格式规则。`;
+6. 注入优先级固定：角色卡 system prompt → 世界书命中条目 → user 人设 → 长期记忆/关系状态 → 隐藏上下文 → 当前时间 → 默认格式规则。
+
+【可用工具】
+你有以下三个工具可以主动调用，无需等待user指示：
+- write_memory(category, title, content)：把重要信息存入长期记忆。category可选：关系节点、具体事件、偏好、约定、普通记忆。聊到重要的事、约定、关系变化时主动存。
+- search_history(query, limit)：搜索以前聊过的内容。user问"我们之前说过"、"你还记得"之类的问题时用。
+- read_file(filename, offset, length)：读取user上传的文件内容，支持分段读取。
+工具在后台静默执行，不会打断对话流程。`;
 }
 function normalizeChatUrl(url){
   let u=String(url||"").trim();
@@ -7029,6 +7057,85 @@ function getClaudeTools(){
   ];
 }
 
+function getWechatTools(){
+  return [
+    {
+      type:"function",
+      function:{
+        name:"write_memory",
+        description:"把重要信息写入长期记忆系统。聊到重要约定、关系变化、偏好时主动调用。",
+        parameters:{
+          type:"object",
+          properties:{
+            category:{type:"string",enum:["关系节点","具体事件","偏好","约定","普通记忆"],description:"记忆分类"},
+            title:{type:"string",description:"记忆标题，不超过20字"},
+            content:{type:"string",description:"记忆正文"}
+          },
+          required:["category","title","content"]
+        }
+      }
+    },
+    {
+      type:"function",
+      function:{
+        name:"search_history",
+        description:"搜索微信聊天历史记录中的关键词。",
+        parameters:{
+          type:"object",
+          properties:{
+            query:{type:"string",description:"搜索关键词"},
+            limit:{type:"integer",description:"返回条数上限，默认5"}
+          },
+          required:["query"]
+        }
+      }
+    },
+    {
+      type:"function",
+      function:{
+        name:"read_file",
+        description:"读取用户上传的文件内容，支持分段读取。",
+        parameters:{
+          type:"object",
+          properties:{
+            filename:{type:"string",description:"要读取的文件名"},
+            offset:{type:"integer",description:"起始字符位置，默认0"},
+            length:{type:"integer",description:"读取字符数，不传则读全部"}
+          },
+          required:["filename"]
+        }
+      }
+    }
+  ];
+}
+async function executeWechatTool(name, args){
+  if(name==="read_file"){
+    const filename=args.filename||"";
+    const offset=parseInt(args.offset)||0;
+    const length=parseInt(args.length)||0;
+    const fileData=await getStoredFile(filename);
+    if(!fileData) return {error:`文件 "${filename}" 不存在，请先上传`};
+    const text=fileData.text||"";
+    const total=text.length;
+    const slice=length>0?text.slice(offset,offset+length):text.slice(offset);
+    return {filename,offset,length:slice.length,total,content:slice,has_more:offset+slice.length<total};
+  }
+  if(name==="write_memory"){
+    const entry={id:uid("mem"),title:args.title||"",type:args.category||"普通记忆",content:args.content||"",source:`微信${currentRole()?.name||"角色"}写入`,important:args.category==="关系节点"||args.category==="约定",locked:false,createdAt:Date.now(),time:nowTime()};
+    const list=getMemories(); list.push(entry); saveMemories(list);
+    return {status:"saved",id:entry.id,title:entry.title};
+  }
+  if(name==="search_history"){
+    const query=(args.query||"").toLowerCase();
+    const limit=parseInt(args.limit)||5;
+    const h=getHistory().filter(m=>["text","voice","image_desc"].includes(m.type));
+    const results=h.filter(m=>(m.content||"").toLowerCase().includes(query))
+      .slice(-limit)
+      .map(m=>({time:m.time||"",sender:m.sender==="user"?"user":"role",content:(m.content||"").slice(0,300)}));
+    return {query,count:results.length,results};
+  }
+  return {error:`未知工具: ${name}`};
+}
 async function executeClaudeTool(name, args){
   if(name==="read_file"){
     const filename=args.filename||"";
@@ -7044,7 +7151,7 @@ async function executeClaudeTool(name, args){
   }
   if(name==="write_memory"){
     const mode=getClaudeMode();
-    const entry={id:uid("mem"),title:args.title||"",type:args.category||"普通记忆",content:args.content||"",source:"角色主动记录",important:args.category==="关系节点"||args.category==="约定",locked:false,createdAt:Date.now(),time:nowTime()};
+    const entry={id:uid("mem"),title:args.title||"",type:args.category||"普通记忆",content:args.content||"",source:(typeof getClaudeMode==="function"&&getClaudeMode()==="tool")?"工具Claude写入":`${currentRole()?.name||"角色"}Claude写入`,important:args.category==="关系节点"||args.category==="约定",locked:false,createdAt:Date.now(),time:nowTime()};
     if(mode==="tool"){
       const list=getToolMemories(); list.push(entry); saveToolMemories(list);
     } else {
