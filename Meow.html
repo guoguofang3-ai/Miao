@@ -2536,7 +2536,9 @@ const Miao = {
   state:{
     currentApp:"home",
     currentRoleId:null,
-    busy:false
+    busy:false,
+    memFolderRole:true,
+    memFolderTool:true
   },
   defaults:{
     avatar:"data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="36" fill="#111827"/><text x="60" y="74" text-anchor="middle" font-size="56" fill="white">喵</text></svg>')
@@ -2929,6 +2931,11 @@ function bindEvents(){
     if(action==="save-memory-entry") saveMemoryEntryFromModal();
     if(action==="delete-memory") deleteMemory(id,btn.dataset.scope);
     if(action==="toggle-memory-lock") toggleMemoryLock(id,btn.dataset.scope);
+    if(action==="toggle-mem-folder"){
+      if(id==="role") Miao.state.memFolderRole=!Miao.state.memFolderRole;
+      else Miao.state.memFolderTool=!Miao.state.memFolderTool;
+      renderMemory();
+    }
     if(action==="toggle-memory-important") toggleMemoryImportant(id,btn.dataset.scope);
     if(action==="extract-memory") extractMemoryFromSource(id);
     if(action==="confirm-memory-candidates") confirmMemoryCandidates();
@@ -3799,16 +3806,27 @@ async function callAI(api, history, onChunk){
       const valid=history.filter(m=>["text","sticker","image_desc","voice","link","transfer","delivery","received","paid","rejected","role_transfer"].includes(m.type));
       // 按groupId合并同组气泡，groupId相同的角色回复合并成一条
       const grouped=[];
+      // 找最近一张有真实图片的消息id
+      const lastRealImgId=valid.slice().reverse().find(m=>m.type==="image_desc"&&m.data?.hasRealImage)?.id||null;
       for(const m of valid){
         const apiRole=m.sender==="user"?"user":"assistant";
         const last=grouped[grouped.length-1];
         if(last && last.role===apiRole && apiRole==="assistant" && m.groupId && last._groupId===m.groupId){
           last.content+=" "+messageToAIContext(m);
         } else {
-          grouped.push({role:apiRole, content:messageToAIContext(m), _groupId:m.groupId||null});
+          // 最近一张有真实图片：以multipart content发送
+          if(m.id===lastRealImgId && window.wechatImageMap?.[m.id]){
+            const dataUrl=window.wechatImageMap[m.id];
+            grouped.push({role:apiRole, content:[
+              {type:"image_url", image_url:{url:dataUrl}},
+              {type:"text", text:messageToAIContext(m)}
+            ], _groupId:m.groupId||null});
+          } else {
+            grouped.push({role:apiRole, content:messageToAIContext(m), _groupId:m.groupId||null});
+          }
         }
       }
-      // 取最近20轮（合并后）
+      // 取最近100轮（合并后）
       return grouped.slice(-100).map(m=>({role:m.role,content:m.content}));
     })()
   ];
@@ -7095,9 +7113,28 @@ function submitVoiceInput(){
   callAIReply();
 }
 function openImageDescModalOriginal(){
-  openQuickModal(`<div class="quick-modal-title">发送图片描述</div>
-    <label>图片内容描述</label><textarea id="quickImageDesc" placeholder="例如：一张猫猫趴在沙发上撒娇的照片"></textarea>
+  openQuickModal(`<div class="quick-modal-title">发送图片</div>
+    <label>上传图片（可选，模型可直接看到）</label>
+    <input type="file" accept="image/*" id="quickImageFile" style="margin-bottom:8px">
+    <div id="quickImagePreview" style="margin-bottom:8px;display:none"><img id="quickImagePreviewImg" style="max-width:100%;max-height:180px;border-radius:10px;object-fit:contain"></div>
+    <label>图片描述（可选，不上传图片时用于描述内容）</label>
+    <textarea id="quickImageDesc" placeholder="例如：一张猫猫趴在沙发上撒娇的照片"></textarea>
     <div class="btn-row"><button class="btn" data-action="close-quick-modal">取消</button><button class="btn primary" data-action="submit-image-desc">发送</button></div>`);
+  // 绑定文件选择预览
+  setTimeout(()=>{
+    const fileInput=document.getElementById("quickImageFile");
+    if(fileInput) fileInput.addEventListener("change",()=>{
+      const f=fileInput.files?.[0];
+      if(!f) return;
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const img=document.getElementById("quickImagePreviewImg");
+        const preview=document.getElementById("quickImagePreview");
+        if(img && preview){ img.src=e.target.result; preview.style.display="block"; }
+      };
+      reader.readAsDataURL(f);
+    });
+  },100);
 }
 
 function afterUserSpecialMessageSent(){
@@ -7124,11 +7161,30 @@ function afterUserSpecialMessageSent(){
 
 function submitImageDesc(){
   const desc=($("#quickImageDesc")?.value||"").trim();
-  if(!desc){ toast("请填写图片描述"); return; }
-  const h=getHistory();
-  h.push({id:uid("msg"), groupId:uid("usergrp"), sender:"user", type:"image_desc", content:`[图片描述:${desc}]`, data:{description:desc}, read:false, createdAt:Date.now(), time:nowTime()});
-  saveHistory(h);
-  afterUserSpecialMessageSent();
+  const fileInput=document.getElementById("quickImageFile");
+  const f=fileInput?.files?.[0];
+  if(!desc && !f){ toast("请填写图片描述或上传图片"); return; }
+  const msgId=uid("msg");
+  if(f){
+    // 读取base64存入内存Map，不存localStorage
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const dataUrl=e.target.result;
+      if(!window.wechatImageMap) window.wechatImageMap={};
+      window.wechatImageMap[msgId]=dataUrl;
+      const h=getHistory();
+      const finalDesc=desc||(f.name||"图片");
+      h.push({id:msgId, groupId:uid("usergrp"), sender:"user", type:"image_desc", content:`[图片描述:${finalDesc}]`, data:{description:finalDesc, hasRealImage:true}, read:false, createdAt:Date.now(), time:nowTime()});
+      saveHistory(h);
+      afterUserSpecialMessageSent();
+    };
+    reader.readAsDataURL(f);
+  } else {
+    const h=getHistory();
+    h.push({id:msgId, groupId:uid("usergrp"), sender:"user", type:"image_desc", content:`[图片描述:${desc}]`, data:{description:desc}, read:false, createdAt:Date.now(), time:nowTime()});
+    saveHistory(h);
+    afterUserSpecialMessageSent();
+  }
 }
 
 function showActionErrorModal(title, err){
@@ -7397,7 +7453,7 @@ function renderMemoryList(){
   let html="";
   // 角色记忆文件夹
   html+=`<div class="memory-folder">
-    <div class="memory-folder-header" onclick="Miao.state.memFolderRole=!Miao.state.memFolderRole;renderMemory()">
+    <div class="memory-folder-header" data-action="toggle-mem-folder" data-id="role" style="cursor:pointer">
       <span class="entry-toggle-arrow ${roleExpanded?"open":""}">›</span>
       <b>${escapeHtml(roleName)} 的记忆</b>
       <span style="color:#aaa;font-size:12px;margin-left:auto">${roleMem.length}条</span>
@@ -7407,7 +7463,7 @@ function renderMemoryList(){
 
   // 工具克记忆文件夹
   html+=`<div class="memory-folder">
-    <div class="memory-folder-header" onclick="Miao.state.memFolderTool=!Miao.state.memFolderTool;renderMemory()">
+    <div class="memory-folder-header" data-action="toggle-mem-folder" data-id="tool" style="cursor:pointer">
       <span class="entry-toggle-arrow ${toolExpanded?"open":""}">›</span>
       <b>工具Claude 的记忆</b>
       <span style="color:#aaa;font-size:12px;margin-left:auto">${toolMem.length}条</span>
