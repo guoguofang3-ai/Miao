@@ -4856,8 +4856,24 @@ function makeStorySummary(){
   saveStorySummary(recent.slice(-1800));
 }
 async function summarizeStory(){
-  makeStorySummary();
-  toast("剧情摘要已更新");
+  const api=Storage.get("api",{});
+  if(!api.apiUrl||!api.apiKey||!api.model){ toast("请先设置 API"); return; }
+  const role=currentRole();
+  const h=getStory();
+  if(!h.length){ toast("暂无剧情内容"); return; }
+  toast("正在生成摘要...");
+  const recent=h.slice(-30).map(m=>`${m.sender==="user"?(getUserProfile().name||"user"):role.name}：${m.content}`).join("\n");
+  try{
+    const summary=await callSimpleChatAPI(api,[
+      {role:"system",content:"你是剧情摘要助手，用简洁的中文总结以下线下剧情的主要内容、重要事件和情感变化，100-200字，不要加标题。"},
+      {role:"user",content:recent}
+    ],0.5);
+    saveStorySummary(summary);
+    toast("剧情摘要已生成");
+  }catch(err){
+    makeStorySummary();
+    toast("AI摘要失败，已保存原文摘要");
+  }
 }
 async function clearStory(){
   if(!await askConfirm("清空当前角色线下剧情？")) return;
