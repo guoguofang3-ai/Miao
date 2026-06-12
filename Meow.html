@@ -3280,11 +3280,13 @@ function bindEvents(){
   });
   $("#wallpaperInput").addEventListener("change", async (e)=>{
     const f=e.target.files[0]; if(!f) return;
-    const data=await fileToDataUrl(f);
-    Storage.set(Storage.roleKey("wallpaper"), {type:"image", value:`url("${data}")`});
-    applyVisuals();
-    renderWallGrid();
-    toast("当前锁屏/主屏壁纸已应用");
+    try{
+      const data=(typeof compressImageFile==="function") ? await compressImageFile(f,900,.82) : await fileToDataUrl(f);
+      Storage.set(Storage.roleKey("wallpaper"), {type:"image", value:`url("${data}")`});
+      applyVisuals();
+      renderWallGrid();
+      toast("当前锁屏/主屏壁纸已应用");
+    }catch(err){ toast("壁纸设置失败："+err.message); }
     e.target.value="";
   });
 
@@ -6483,7 +6485,7 @@ function getPresetMaster(){ return Storage.get("presetMasterOn",true); }
 function savePresetMaster(v){ Storage.set("presetMasterOn",v); }
 
 // 导入预设JSON
-async function importPresetFile(file){
+async async function importPresetFile(file){
   try{
     const text=await file.text();
     const raw=JSON.parse(text);
