@@ -119,7 +119,7 @@ textarea{min-height:96px;resize:vertical;line-height:1.55}
 .wechat{background:var(--wechat-bg)}
 .wechat-head{margin:0;padding:10px 14px 12px;border-radius:0;background:var(--bar-bg,rgba(255,255,255,.92));backdrop-filter:blur(18px);border:none;border-bottom:1px solid rgba(0,0,0,.07);display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(50,60,80,.06);z-index:6;flex:0 0 auto;color:var(--bar-text,#111827);overflow:visible;position:relative}
 .profile{display:flex;align-items:center;gap:10px;min-width:0}.profile-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:#ddd}.profile-title{font-size:17px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:188px}.profile-sub{font-size:11px;color:#666;display:flex;align-items:center;gap:5px;margin-top:2px}.online-dot{width:7px;height:7px;border-radius:50%;background:#2da44e;display:inline-block}
-.chat{flex:1;min-height:0;padding:12px 14px 8px;overflow:auto;scroll-behavior:smooth}
+.chat{flex:1;min-height:0;padding:12px 14px 8px;overflow:auto;scroll-behavior:auto}
 .date-chip,.system-card{margin:10px auto;padding:7px 12px;background:rgba(0,0,0,.06);color:#666;border-radius:999px;font-size:12px;width:max-content;max-width:92%;text-align:center;backdrop-filter:blur(10px)}
 .system-card.error{background:#fff1f0;border:1px solid #ffd6d2;color:#b42318;border-radius:16px;width:auto}
 .msg{display:flex;gap:8px;margin:10px 0;align-items:flex-start}.msg.user{flex-direction:row-reverse}.avatar{width:35px;height:35px;border-radius:50%;object-fit:cover;background:#ddd;flex:0 0 auto;box-shadow:0 3px 12px rgba(0,0,0,.08);margin-top:2px}.bubble-wrap{max-width:76%;display:flex;flex-direction:column;align-items:flex-start}.msg.user .bubble-wrap{align-items:flex-end}
@@ -3747,8 +3747,9 @@ function renderChat(){
     return;
   }
   chat.innerHTML=`<div class="date-chip">今天</div>` + h.map((m,idx)=>renderMessage(m,h,idx)).join("");
-  chat.scrollTop=chat.scrollHeight;
-  setTimeout(()=>{ chat.scrollTop=chat.scrollHeight; }, 100);
+  const lastMsg=chat.lastElementChild;
+  if(lastMsg) lastMsg.scrollIntoView({block:"end"});
+  else chat.scrollTop=chat.scrollHeight;
 }
 function renderMessage(m,h,idx){
   if(m.type==="error") return `<div class="system-card error">${escapeHtml(m.content)}</div>`;
