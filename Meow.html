@@ -169,6 +169,11 @@ textarea{min-height:96px;resize:vertical;line-height:1.55}
   background:#f44;border:2px solid #fff;
   display:none;
 }
+.story-msg-menu,.call-msg-menu-wrap{position:relative}
+.msg-ctx-menu{position:fixed;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:9999;overflow:hidden;min-width:100px}
+.msg-ctx-menu button{display:block;width:100%;padding:10px 16px;background:transparent;border:none;text-align:left;font-size:14px;cursor:pointer;color:#333}
+.msg-ctx-menu button:hover{background:#f5f5f5}
+.msg-ctx-menu button.danger{color:#e53935}
 .send-btn{width:44px;height:44px;border:0;border-radius:50%;background:var(--accent);color:#fff;font-size:18px;flex:0 0 auto}
 .role-item{display:flex;align-items:center;gap:10px}.role-item img{width:46px;height:46px;border-radius:16px;object-fit:cover;background:#ddd}.role-info{flex:1;min-width:0}.role-name{font-weight:950}.role-desc{font-size:12px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.role-item.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .model-list{display:grid;gap:7px;max-height:190px;overflow:auto;margin-top:8px}.model-item{border:0;border-radius:13px;padding:10px 11px;background:#f3f4f6;color:#222;text-align:left;font-size:12px;font-weight:850;word-break:break-all}.model-item.active{background:var(--accent);color:#fff}.status-box{margin-top:8px;font-size:12px;line-height:1.55;color:#777;white-space:pre-wrap;overflow-wrap:anywhere}.status-box.ok{padding:8px 10px;border-radius:12px;background:#ecfdf3;border:1px solid #abefc6;color:#067647}.status-box.error{padding:8px 10px;border-radius:12px;background:#fff1f0;border:1px solid #ffd6d2;color:#b42318}
@@ -3039,6 +3044,18 @@ function bindEvents(){
     if(action==="send-story") sendStory();
     if(action==="clear-story") clearStory();
     if(action==="summarize-story") summarizeStory();
+    if(action==="story-msg-menu"){
+      e.preventDefault(); e.stopPropagation();
+      showMsgCtxMenu(e, [
+        {label:"删除这条", danger:true, onClick:()=>deleteStoryMsg(id)}
+      ]);
+    }
+    if(action==="call-msg-menu"){
+      e.preventDefault(); e.stopPropagation();
+      showMsgCtxMenu(e, [
+        {label:"删除这条", danger:true, onClick:()=>deleteCallMsg(id)}
+      ]);
+    }
     if(action==="start-call") startCall();
     if(action==="end-call") endCall();
     if(action==="send-call-line") sendCallLine();
@@ -5132,11 +5149,41 @@ function renderStory(){
     box.innerHTML=`<div class="system-card">线下剧情独立于微信。这里发生的内容可作为隐藏上下文被微信 API 读取。</div>`;
     return;
   }
-  box.innerHTML=h.map(m=>`<div class="story-msg ${m.sender==="user"?"user":"role"}">
+  box.innerHTML=h.map(m=>`<div class="story-msg ${m.sender==="user"?"user":"role"}" data-id="${m.id}">
     <img class="story-avatar" src="${escapeAttr(m.sender==="user"?(getUserProfile().avatar||Miao.defaults.avatar):(currentRole().avatar||Miao.defaults.avatar))}">
-    <div class="story-bubble">${escapeHtml(m.content||"")}</div>
+    <div class="story-bubble" data-action="story-msg-menu" data-id="${m.id}">${escapeHtml(m.content||"")}</div>
   </div>`).join("");
   box.scrollTop=box.scrollHeight;
+}
+
+function showMsgCtxMenu(e, items){
+  // 关闭已有菜单
+  const old=document.getElementById("msgCtxMenu");
+  if(old) old.remove();
+  const menu=document.createElement("div");
+  menu.id="msgCtxMenu";
+  menu.className="msg-ctx-menu";
+  items.forEach(item=>{
+    const btn=document.createElement("button");
+    btn.textContent=item.label;
+    if(item.danger) btn.classList.add("danger");
+    btn.onclick=()=>{ menu.remove(); item.onClick(); };
+    menu.appendChild(btn);
+  });
+  document.body.appendChild(menu);
+  // 定位
+  const x=Math.min(e.clientX, window.innerWidth-120);
+  const y=Math.min(e.clientY, window.innerHeight-80);
+  menu.style.left=x+"px";
+  menu.style.top=y+"px";
+  // 点击其他地方关闭
+  setTimeout(()=>document.addEventListener("click",()=>menu.remove(),{once:true}),10);
+}
+
+function deleteStoryMsg(id){
+  const h=getStory().filter(m=>m.id!==id);
+  saveStory(h);
+  renderStory();
 }
 async function sendStory(){
   const input=$("#storyInput");
@@ -5241,7 +5288,7 @@ function renderCall(){
   if(!h.length){ box.innerHTML=`<div class="system-card">暂无通话记录。通话内容会作为隐藏上下文保存，不显示在微信聊天界面。</div>`; return; }
   box.innerHTML=h.map(c=>{
     if(c.type==="session") return `<div class="system-card">通话结束：${escapeHtml(c.time)} · ${formatDuration(c.duration||0)}<br>${escapeHtml(c.summary||"")}</div>`;
-    return `<div class="call-line"><span class="speaker">${escapeHtml(c.sender==="user"?(getUserProfile().name||"user"):role.name)}：</span>${escapeHtml(c.content||"")}</div>`;
+    return `<div class="call-line" data-id="${c.id}"><span class="speaker">${escapeHtml(c.sender==="user"?(getUserProfile().name||"user"):role.name)}：</span><span data-action="call-msg-menu" data-id="${c.id}">${escapeHtml(c.content||"")}</span></div>`;
   }).join("");
   box.scrollTop=box.scrollHeight;
 }
@@ -5296,6 +5343,12 @@ function formatDuration(sec){
   const s=String(sec%60).padStart(2,"0");
   return `${m}:${s}`;
 }
+function deleteCallMsg(id){
+  const h=getCallHistory().filter(c=>c.id!==id);
+  saveCallHistory(h);
+  renderCall();
+}
+
 async function sendCallLine(){
   const input=$("#callInput");
   const text=input.value.trim();
