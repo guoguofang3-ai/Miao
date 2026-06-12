@@ -6485,7 +6485,7 @@ function getPresetMaster(){ return Storage.get("presetMasterOn",true); }
 function savePresetMaster(v){ Storage.set("presetMasterOn",v); }
 
 // 导入预设JSON
-async async function importPresetFile(file){
+async function importPresetFile(file){
   try{
     const text=await file.text();
     const raw=JSON.parse(text);
