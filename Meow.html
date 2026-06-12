@@ -3986,6 +3986,8 @@ async function callAIReply(){
       saveHistory(hh);
       renderChat();
       checkSaveMarker(Miao.state.lastAIContent||"");
+      checkStickyNoteMarker(Miao.state.lastAIContent||"");
+      checkDiceMarker(Miao.state.lastAIContent||"");
       maybeUpdateRoleStatus();
     } else {
       const parsed=parseAIReplyUnified(reply,groupId);
@@ -3995,6 +3997,8 @@ async function callAIReply(){
       saveHistory(h);
       renderChat();
       checkSaveMarker(Miao.state.lastAIContent||"");
+      checkStickyNoteMarker(Miao.state.lastAIContent||"");
+      checkDiceMarker(Miao.state.lastAIContent||"");
       maybeUpdateRoleStatus();
     }
   }catch(err){
@@ -4047,6 +4051,43 @@ function checkSaveMarker(replyText){
     time: nowTime()
   });
   saveMemories(list);
+}
+
+
+function checkStickyNoteMarker(replyText){
+  if(!replyText) return;
+  const matches = [...replyText.matchAll(/\[便签:\s*([^\]]+)\]/g)];
+  if(!matches.length) return;
+  const list = getStickyNotes();
+  const role = currentRole();
+  let added = 0;
+  for(const m of matches){
+    const text = m[1].trim();
+    if(!text) continue;
+    if(list.find(n=>n.text===text)) continue; // 去重
+    list.push({id:uid("stk"), text:`${role?.name||"角色"}：${text}`, createdAt:Date.now()});
+    added++;
+  }
+  if(added > 0){
+    saveStickyNotes(list);
+    renderStickyNotes();
+  }
+}
+
+function checkDiceMarker(replyText){
+  if(!replyText) return;
+  if(!/\[骰子\]/.test(replyText) && !/\[roll\]/i.test(replyText)) return;
+  const role = currentRole();
+  const faces = [4,6,8,10,12,20];
+  const face = faces[Math.floor(Math.random()*faces.length)];
+  const result = Math.floor(Math.random()*face)+1;
+  const h = getHistory();
+  h.push({id:uid("msg"), groupId:uid("rolegrp"), sender:"role", type:"text",
+    content:`🎲 ${role?.name||"角色"} 掷出 d${face} → ${result}`,
+    read:true, createdAt:Date.now(), time:nowTime()});
+  saveHistory(h);
+  renderChat();
+  const chat=document.getElementById("chat"); if(chat) chat.scrollTop=chat.scrollHeight;
 }
 
 async function callAI(api, history, onChunk){
@@ -4257,6 +4298,11 @@ user钱包余额：¥${w.toFixed(2)}`;
 5. 你自己说的认真的话、做的承诺
 6. user对你行为方式的反馈——让他难受或喜欢的
 日常闲聊、玩梗、普通对话不加标记。格式：[SAVE: 摘要]，放在回复最末尾。
+
+【角色可用指令】
+- [便签: 内容]：给user贴一张便签，user下次进来能看到。想留话给user时用，像贴在冰箱上那种。
+- [骰子]：随机掷一个骰子（d4/d6/d8/d10/d12/d20），结果会显示在聊天里。玩真心话大冒险或需要随机数时用。
+指令放在回复最末尾，可以同时用多个。
 
 【可用工具】按需主动调用，后台静默执行：
 - read_memory(category?, query?, limit?)：读记忆库，想起某件事或查某类记忆时用。
