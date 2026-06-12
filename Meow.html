@@ -3748,6 +3748,7 @@ function renderChat(){
   }
   chat.innerHTML=`<div class="date-chip">今天</div>` + h.map((m,idx)=>renderMessage(m,h,idx)).join("");
   chat.scrollTop=chat.scrollHeight;
+  setTimeout(()=>{ chat.scrollTop=chat.scrollHeight; }, 100);
 }
 function renderMessage(m,h,idx){
   if(m.type==="error") return `<div class="system-card error">${escapeHtml(m.content)}</div>`;
