@@ -3862,6 +3862,7 @@ function renderMessageBody(m){
     .replace(/\[骰子\]/g, "")
     .replace(/\[roll\]/gi, "")
     .trim();
+  if(!displayContent) return "";
   return `<div class="bubble">${escapeHtml(displayContent)}</div>`;
 }
 function escapeAttr(s){ return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
