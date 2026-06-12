@@ -3921,11 +3921,19 @@ function bindMessageLongPressMenu(){
   ["mouseup","mouseleave","mousemove"].forEach(ev=>chat.addEventListener(ev,()=>clearTimeout(timer)));
 }
 
+function stripInstructions(t){
+  return t
+    .replace(/\[SAVE:\s*[^\]]*\]/g,"")
+    .replace(/\[便签:\s*[^\]]*\]/g,"")
+    .replace(/\[骰子\]/g,"")
+    .replace(/\[roll\]/gi,"")
+    .trim();
+}
 function splitReply(text){
   let s=cleanAIText(text);
-  const blocks=s.split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);
+  const blocks=s.split(/\n{2,}/).map(x=>x.trim()).filter(x=>stripInstructions(x));
   if(blocks.length>1) return blocks;
-  const lines=s.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const lines=s.split(/\n+/).map(x=>x.trim()).filter(x=>stripInstructions(x));
   if(lines.length>1) return lines;
   return s ? [s] : [];
 }
@@ -7954,8 +7962,7 @@ function parseAIReplyUnified(raw, groupId){
   });
   splitReply(text).forEach(t=>{
     // 过滤掉只含指令标记的气泡
-    const stripped=t.replace(/\[SAVE:\s*[^\]]*\]/g,"").replace(/\[便签:\s*[^\]]*\]/g,"").replace(/\[骰子\]/g,"").replace(/\[roll\]/gi,"").trim();
-    if(stripped) add({type:"text", content:t});
+    if(stripInstructions(t)) add({type:"text", content:t});
   });
   return out;
 }
