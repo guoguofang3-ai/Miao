@@ -4340,6 +4340,8 @@ ${getStickerPromptList()}
 - 收到代付请求时，只能用[帮忙代付]或[拒绝代付]，绝对不能用[主动转账]。
 - 看到[用户转账]时，只能用[收款]或[拒收转账]，绝对不能用[主动转账]。
 - 已经完成的转账流程（状态为collected/received/paid）不要重复发起。
+- 发出[收款]、[拒收转账]、[帮忙代付]、[拒绝代付]指令后，不需要输出任何说明文字，不需要描述转账流程，直接继续对话。
+- 指令格式必须严格遵守，只能用[收款]，不能用[收款完成:...]、[已收款:...]等任何变体。
 
 【格式规则】
 1. 你只能扮演${role.name}，不能替user说话。
@@ -8021,27 +8023,27 @@ function parseAIReplyUnified(raw, groupId){
   consume(/\[向user发起代付[:：]\s*([0-9]+(?:\.[0-9]{1,2})?)\s*\|\s*([^\]]*?)\]/g,(amount,note)=>{
     add({type:"role_request_delivery", content:`[向user发起代付:${amount}|${note||""}]`, data:{amount:Number(amount).toFixed(2), note:String(note||"").trim(), status:"pending"}});
   });
-  consume(/[\[【]收款[\]】]/g,()=>{
+  consume(/[\[【]收款[^】\]]*[\]】]/g,()=>{
     if(pendingTransfer && pendingTransfer.data.status==="pending"){
       pendingTransfer.data.status="received";
       add({type:"received", content:"已收款", data:{amount:pendingTransfer.data.amount, note:pendingTransfer.data.note}});
       receiveTransferToWallet(parseFloat(pendingTransfer.data.amount)||0);
     }
   });
-  consume(/[\[【]拒收转账[\]】]/g,()=>{
+  consume(/[\[【]拒收转账[^】\]]*[\]】]/g,()=>{
     if(pendingTransfer && pendingTransfer.data.status==="pending"){
       pendingTransfer.data.status="rejected";
       add({type:"rejected", content:"已拒收这笔转账", data:{amount:pendingTransfer.data.amount, note:pendingTransfer.data.note}});
     }
   });
-  consume(/[\[【]帮忙代付[\]】]/g,()=>{
+  consume(/[\[【]帮忙代付[^】\]]*[\]】]/g,()=>{
     if(pendingDelivery && pendingDelivery.data.status==="pending"){
       pendingDelivery.data.status="paid";
       if(pendingDelivery.data.orderId) updateElemeOrderStatus(pendingDelivery.data.orderId,"paid");
       add({type:"paid", content:"我已帮忙代付", data:{amount:pendingDelivery.data.amount, item:pendingDelivery.data.item}});
     }
   });
-  consume(/[\[【]拒绝代付[\]】]/g,()=>{
+  consume(/[\[【]拒绝代付[^】\]]*[\]】]/g,()=>{
     if(pendingDelivery && pendingDelivery.data.status==="pending"){
       pendingDelivery.data.status="rejected";
       if(pendingDelivery.data.orderId) updateElemeOrderStatus(pendingDelivery.data.orderId,"rejected");
