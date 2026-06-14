@@ -3812,6 +3812,9 @@ function sendMessage(){
     msg.quoteSender=Miao.state.quoteSender;
   }
   h.push(msg);
+  if(isBlocked()){
+    h.push({id:uid("msg"), groupId:uid("sysgrp"), sender:"system", type:"system", content:"消息已发出，但被对方拒收了。", createdAt:Date.now()+1, time:nowTime()});
+  }
   saveHistory(h);
   input.value="";
   clearQuote();
@@ -4235,12 +4238,6 @@ async function callAIReply(){
       // 清除流式缓存
       if(Miao.state.streamPartial) delete Miao.state.streamPartial[streamMsgId];
       saveHistory(hh);
-      if(Miao.state.blockNotify){
-        Miao.state.blockNotify=false;
-        const hNotify=getHistory();
-        hNotify.push({id:uid("msg"), groupId:uid("sysgrp"), sender:"system", type:"system", content:"消息已发出，但被对方拒收了。", createdAt:Date.now(), time:nowTime()});
-        saveHistory(hNotify);
-      }
       renderChat();
       checkSaveMarker(Miao.state.lastAIContent||"");
       checkStickyNoteMarker(Miao.state.lastAIContent||"");
@@ -4253,12 +4250,6 @@ async function callAIReply(){
       markUnreadAsRead(h);
       parsed.forEach(m=>h.push(m));
       saveHistory(h);
-      if(Miao.state.blockNotify){
-        Miao.state.blockNotify=false;
-        const hNotify=getHistory();
-        hNotify.push({id:uid("msg"), groupId:uid("sysgrp"), sender:"system", type:"system", content:"消息已发出，但被对方拒收了。", createdAt:Date.now(), time:nowTime()});
-        saveHistory(hNotify);
-      }
       renderChat();
       checkSaveMarker(Miao.state.lastAIContent||"");
       checkStickyNoteMarker(Miao.state.lastAIContent||"");
@@ -8192,7 +8183,7 @@ function parseAIReplyUnified(raw, groupId){
   let rawText=String(raw||"");
   if(/[\[【]拉黑[\]】]/.test(rawText)){
     rawText=rawText.replace(/[\[【]拉黑[\]】]/g,"");
-    setBlocked(true); updateBlockBar(); Miao.state.blockNotify=true;
+    setBlocked(true); updateBlockBar();
   }
   if(/[\[【]解除拉黑[\]】]/.test(rawText)){
     rawText=rawText.replace(/[\[【]解除拉黑[\]】]/g,"");
