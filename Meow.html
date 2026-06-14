@@ -4699,6 +4699,8 @@ async function clearChat(){
   localStorage.removeItem("chatHistory_" + Miao.state.currentRoleId);
   // 兼容可能存在的运行时缓存，避免清空后旧上下文被带回
   Miao.state.lastClearedWechatRoleId = Miao.state.currentRoleId;
+  setBlocked(false);
+  updateBlockBar();
   renderChat();
   toast("已清空当前聊天记录");
 }
