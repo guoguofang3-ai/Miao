@@ -3896,12 +3896,15 @@ function renderMessage(m,h,idx){
   const role=currentRole();
   const userProfile=Storage.get("userProfile", {});
   const isUser=m.sender==="user";
-  const blocked=isBlocked();
+  const blockedData=Storage.get(Storage.roleKey("blocked"), false);
+  const blockedAt=blockedData&&blockedData.blockedAt ? blockedData.blockedAt : null;
+  const blockedNow=blockedData===true||(blockedData&&blockedData.blocked===true);
+  const isBlockedMsg=isUser && blockedNow && blockedAt && m.createdAt>=blockedAt;
   const cls=isUser?"user":"role";
   const avatar=isUser?(userProfile.avatar||Miao.defaults.avatar):(role.avatar||Miao.defaults.avatar);
   const next=h[idx+1];
   const isLastInAssistantGroup = !isUser && (!next || next.sender!=="role" || next.groupId!==m.groupId);
-  return `<div class="msg ${cls}${isUser&&blocked?" blocked-msg":""}" data-id="${m.id}" data-group-id="${m.groupId||""}" data-sender="${m.sender}" data-last-role-group="${isLastInAssistantGroup ? "1" : "0"}">
+  return `<div class="msg ${cls}${isBlockedMsg?" blocked-msg":""}" data-id="${m.id}" data-group-id="${m.groupId||""}" data-sender="${m.sender}" data-last-role-group="${isLastInAssistantGroup ? "1" : "0"}">
     <img class="avatar" src="${avatar}" alt="">
     <div class="bubble-wrap">
       ${!isUser?`<div class="name-line">${escapeHtml(role.name)}</div>`:""}
@@ -4151,6 +4154,7 @@ function stripInstructions(t){
     .replace(/\[(?:状态更新|主动转账|向user发起代付)[:：]\s*[^\]]*\]/g,"")
     .replace(/\[(?:收款|拒收转账|帮忙代付|拒绝代付)\]/g,"")
     .replace(/含义[:：]\s*.*/g,"")
+    .replace(/[\[【](?:拉黑|解除拉黑)[\]】]/g,"")
     .trim();
 }
 function splitReply(text){
@@ -8164,12 +8168,21 @@ function parseAIReplyUnified(raw, groupId){
     out.push(Object.assign({id:uid("msg"), groupId, sender:"role", createdAt:Date.now(), time:nowTime()}, msg));
   };
 
-  // 预处理：去掉HTML标签和角色扮演格式前缀
-  let text=cleanAIText(raw);
+  // 最优先：拉黑/解除拉黑指令，在所有其他处理之前
+  let rawText=String(raw||"");
+  if(/[\[【]拉黑[\]】]/.test(rawText)){
+    rawText=rawText.replace(/[\[【]拉黑[\]】]/g,"");
+    setBlocked(true); updateBlockBar();
+  }
+  if(/[\[【]解除拉黑[\]】]/.test(rawText)){
+    rawText=rawText.replace(/[\[【]解除拉黑[\]】]/g,"");
+    setBlocked(false); updateBlockBar();
+  }
+  // 如果清完之后原文为空，直接返回空out（不报错，拉黑是副作用，不需要气泡）
+  if(!rawText.trim()) return out;
 
-  // 拉黑/解除拉黑
-  text=text.replace(/[\[【]拉黑[\]】]/g,()=>{ setBlocked(true); updateBlockBar(); return ""; });
-  text=text.replace(/[\[【]解除拉黑[\]】]/g,()=>{ setBlocked(false); updateBlockBar(); return ""; });
+  // 预处理：去掉HTML标签和角色扮演格式前缀
+  let text=cleanAIText(rawText);
 
   // 状态更新/SAVE/便签/骰子不入out，扫到即处理后从文本移除
   text=text.replace(/[\[【]状态更新[:：]\s*([^\]】]+?)[\]】]/g,(m,status)=>{
